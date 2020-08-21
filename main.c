@@ -15,6 +15,9 @@
 #include <pthread.h>
 #include <ctype.h>
 #include <errno.h>
+//#include "5x8_lcd_hd44780u_a02_font.h"
+#include "BMSPA_font.h"
+//#include "Minimum_font.h"
 #include "ws2811.h"
 
 #define DEFAULT_DEVICE_FILE "/dev/ws281x"
@@ -111,6 +114,10 @@ int       debug=0;            //set to 1 to enable debug output
 // size of led-matrix
 int       matrix_height=32;
 int       matrix_width=8;
+
+// currently only one font with fixed size supported TODO: perhaps add fonts and make this dynamically...
+#define CHAR_HEIGHT 8
+#define CHAR_WIDTH 8
 
 //for TCP mode
 int sockfd;        //socket that listens
@@ -358,7 +365,19 @@ char * read_operation(char * args, char * op){
 	return args;
 }
 
+
+//TODO
+int get_width(char c) {
+    return CHAR_WIDTH;
+}
+
+//TODO
+int is_printable_char(char c) {
+    return 1;
+}
+
 void render_into_vmatrix( char c, ws2811_led_t **vmatrix, int *vmatrix_width, unsigned int current_color) {
+    /*
     //dummy: fill rectangles for each char:
     ws2811_led_t *temp = realloc(*vmatrix, sizeof(ws2811_led_t) * (*vmatrix_width + 5) * matrix_height);
     if(temp) {
@@ -368,11 +387,39 @@ void render_into_vmatrix( char c, ws2811_led_t **vmatrix, int *vmatrix_width, un
         }
         *vmatrix_width += 5;
     }
+    */
 
-    /*if (is_printable_char(c)){
+    if (is_printable_char(c)){
+        int i,j,char_width=get_width(c);
+        ws2811_led_t *temp = realloc(*vmatrix, sizeof(ws2811_led_t) * (*vmatrix_width + 1 + char_width) * matrix_height);
+        if(temp) {
+            *vmatrix = temp;
 
+            // Convert the character to an index
+            c = c & 0x7F;
+            if (c < ' ') {
+                c = 0;
+            } else {
+                c -= ' ';
+            }
 
-    }*/
+            // 'font' is a multidimensional array of [96][char_width]
+            // which is really just a 1D array of size 96*char_width.
+            // const unsigned char* chr = font[c*CHAR_WIDTH];
+            // Draw pixels
+            for (j=0; j<char_width; j++) {
+                for (i=0; i<CHAR_HEIGHT; i++) {
+                    if (font[c][j] & (1<<i)) {
+                        (*vmatrix + (*vmatrix_width+j) * CHAR_HEIGHT + i)->color = current_color;
+                    } else {
+                        (*vmatrix + (*vmatrix_width+j) * CHAR_HEIGHT + i)->color = 0;
+                    }
+                }
+            }
+            *vmatrix_width += char_width;
+        }
+
+    }
 }
 
 
