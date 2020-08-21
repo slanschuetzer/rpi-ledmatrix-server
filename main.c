@@ -366,15 +366,30 @@ char * read_operation(char * args, char * op){
 }
 
 
+// convert the printable character to index of our font-table
+char indexOf(char c) {
+    c = c & 0x7F;
+    if (c < ' ') {
+        c = 0;
+    } else {
+        c -= ' ';
+    }
+    return c;
+}
+
 //TODO
 int get_width(char c) {
-    return CHAR_WIDTH;
+    c=indexOf(c);
+    int w;
+    for(w = CHAR_WIDTH; w>0 && font[c][w] == 0; w--);
+    return w+1;
 }
 
 //TODO
 int is_printable_char(char c) {
     return 1;
 }
+
 
 void render_into_vmatrix( char c, ws2811_led_t **vmatrix, int *vmatrix_width, unsigned int current_color) {
     /*
@@ -396,12 +411,7 @@ void render_into_vmatrix( char c, ws2811_led_t **vmatrix, int *vmatrix_width, un
             *vmatrix = temp;
 
             // Convert the character to an index
-            c = c & 0x7F;
-            if (c < ' ') {
-                c = 0;
-            } else {
-                c -= ' ';
-            }
+            c=indexOf(c);
 
             // 'font' is a multidimensional array of [96][char_width]
             // which is really just a 1D array of size 96*char_width.
