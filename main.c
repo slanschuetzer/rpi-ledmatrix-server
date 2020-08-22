@@ -379,6 +379,7 @@ char indexOf(char c) {
 
 //TODO
 int get_width(char c) {
+    if (c == ' ') return CHAR_WIDTH; //dont trim space (in fact should to that with other whitespace-chars too ...
     c=indexOf(c);
     int w;
     for(w = CHAR_WIDTH; w>0 && font[c][w] == 0; w--);
@@ -435,18 +436,7 @@ void render_into_vmatrix( char c, ws2811_led_t **vmatrix, int *vmatrix_width, un
 
 char * read_text_into_vmatrix(char *args, ws2811_led_t **vmatrix, int *vmatrix_width, int inout, size_t color_size){
     *vmatrix_width = 0;
-    /*if (inout != 0) {
-        // allocate memory and fill with empty/black leds...
-        ws2811_led_t *temp = realloc(*vmatrix, sizeof(ws2811_led_t) * matrix_width * matrix_height);
-        if(temp) {
-           *vmatrix = temp;
-           *vmatrix_width = matrix_width;
-           for(int i=0;i<matrix_width * matrix_height;i++) {
-               (*vmatrix)[i].color=0;
-           }
-        }
-        //we don't care for ooms on reallocations, as the calling function has to free the vmatrix anyways...
-    }*/
+
     unsigned int current_color=255; //(red)
     if (args!=NULL && *args!=0){
         if (*args==',') args++; //just in case someone made two commas?!? Or the original dev wanted to be failsafe if he forgot to increment args before calling his read_xxx functions. I'll just keep it for consistency.
@@ -469,17 +459,7 @@ char * read_text_into_vmatrix(char *args, ws2811_led_t **vmatrix, int *vmatrix_w
             args++;
         }
     }
-    /*if (inout != 0) {
-        // allocate memory at the end of vmatrix and fill with empty/black leds...
-        ws2811_led_t *temp = realloc(*vmatrix, sizeof(ws2811_led_t) * (*vmatrix_width + matrix_width) * matrix_height);
-        if(temp) {
-            *vmatrix = temp;
-            for(int i=*vmatrix_width * matrix_height;i < (*vmatrix_width + matrix_width) * matrix_height;i++) {
-                (*vmatrix)[i].color=0;
-            }
-            vmatrix_width+=matrix_width;
-        }
-    } */
+
     return args;
 }
 
@@ -1565,14 +1545,14 @@ void add_in_out_space(ws2811_led_t **vmatrix, int *vmatrix_width){
           .. currently  / is treated as escape-char for colors (// if you want to display /)
           .. For example: /FF0000red /335566and /00FF00green /335566are colors.
     delay .. number of ms between showing next position (more or less, we are no realtime-system..)
-    loops .. (int) Number of loops the text runs through the matrix. 0 (default) for endless loops...
+    loops .. (int) Number of loops the text runs through the matrix.
     inout .. (int) If yes, empty space is pre- and appended, so the text runs into an empty matrix and leaves an empty matrix when finished ... (default yes)
     reverse_2nd_row .. (int) On my longruner-matrix the leds are arranged like a "snake" (bottom row from right to left, the row above from left to right and so on...)
                        thus, on such matrices (correct plural?) we have to reverse the index of every second row.
                        TODO: This really should not be a general setting and not part of a command.
  */
 void marquee(char * args){
-    int channel=0, loops=0 /*indefinitely*/, inout = 0, reverse_2nd_row=1, delay=100;
+    int channel=0, marquee_loops=1, inout = 0, reverse_2nd_row=1, delay=100;
     // we render the text once and store it into a "virtual matrix" with variable width but bigger than our led-matrix.
     // as vmatrix has to be extended, as the text grows, the "first dimension" of matrix is width ...
     // TODO: Check if we have a problem if text is smaller than our matrix and inout is set to false...
@@ -1583,12 +1563,12 @@ void marquee(char * args){
     args = read_channel(args, &channel);
     args = read_text_into_vmatrix(args, &vmatrix, &vmatrix_width, inout, ledstring.channel[channel].color_size);
     args = read_int(args, &delay);
-    args = read_int(args, &loops);
+    args = read_int(args, &marquee_loops);
     args = read_int(args, &reverse_2nd_row);
     args = read_int(args, &inout);
     if (inout) add_in_out_space(&vmatrix,&vmatrix_width);
     if (is_valid_channel_number(channel)){
-        while (!end_current_command && (loops == 0 || loops > loops_finished) ) {
+        while (!end_current_command && (/*marquee_loops == 0 ||*/ marquee_loops > loops_finished) ) {
 
             // display matrix ...
             for (int x = 0; x < matrix_width; x++) {
