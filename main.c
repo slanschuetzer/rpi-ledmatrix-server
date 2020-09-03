@@ -15,10 +15,13 @@
 #include <pthread.h>
 #include <ctype.h>
 #include <errno.h>
+//#include "5x8_lcd_hd44780u_a02_font.h"
+#include "BMSPA_font.h"
+//#include "Minimum_font.h"
 #include "ws2811.h"
 
 #define DEFAULT_DEVICE_FILE "/dev/ws281x"
-#define DEFAULT_COMMAND_LINE_SIZE 1024
+#define DEFAULT_COMMAND_LINE_SIZE 2048
 #define DEFAULT_BUFFER_SIZE 32768
 
 #define MAX_KEY_LEN 255
@@ -107,6 +110,14 @@ int       mode;               //mode we operate in (TCP, named pipe, file, stdin
 do_loop   loops[MAX_LOOPS]={0};      //positions of 'do' in file loop, max 32 recursive loops
 int       loop_index=0;       //current loop index
 int       debug=0;            //set to 1 to enable debug output
+
+// size of led-matrix
+int       matrix_height=32;
+int       matrix_width=8;
+
+// currently only one font with fixed size supported TODO: perhaps add fonts and make this dynamically...
+#define CHAR_HEIGHT 8
+#define CHAR_WIDTH 8
 
 //for TCP mode
 int sockfd;        //socket that listens
@@ -354,6 +365,104 @@ char * read_operation(char * args, char * op){
 	return args;
 }
 
+
+// convert the printable character to index of our font-table
+char indexOf(char c) {
+    c = c & 0x7F;
+    if (c < ' ') {
+        c = 0;
+    } else {
+        c -= ' ';
+    }
+    return c;
+}
+
+//TODO
+int get_width(char c) {
+    if (c == ' ') return CHAR_WIDTH; //dont trim space (in fact should to that with other whitespace-chars too ...
+    c=indexOf(c);
+    int w;
+    for(w = CHAR_WIDTH; w>0 && font[c][w] == 0; w--);
+    return w+1;
+}
+
+//TODO
+int is_printable_char(char c) {
+    return 1;
+}
+
+
+void render_into_vmatrix( char c, ws2811_led_t **vmatrix, int *vmatrix_width, unsigned int current_color) {
+    /*
+    //dummy: fill rectangles for each char:
+    ws2811_led_t *temp = realloc(*vmatrix, sizeof(ws2811_led_t) * (*vmatrix_width + 5) * matrix_height);
+    if(temp) {
+        *vmatrix = temp;
+        for(int i = *vmatrix_width*matrix_height;i < (*vmatrix_width + 5) * matrix_height; i++) {
+            (*vmatrix)[i].color = current_color;
+        }
+        *vmatrix_width += 5;
+    }
+    */
+
+    if (is_printable_char(c)){
+        int i,j,char_width=get_width(c);
+        ws2811_led_t *temp = realloc(*vmatrix, sizeof(ws2811_led_t) * (*vmatrix_width + 1 + char_width) * matrix_height);
+        if(temp) {
+            *vmatrix = temp;
+
+            // Convert the character to an index
+            c=indexOf(c);
+
+            // 'font' is a multidimensional array of [96][char_width]
+            // which is really just a 1D array of size 96*char_width.
+            // const unsigned char* chr = font[c*CHAR_WIDTH];
+            // Draw pixels
+            for (j=0; j<char_width; j++) {
+                for (i=0; i<CHAR_HEIGHT; i++) {
+                    if (font[c][j] & (1<<i)) {
+                        (*vmatrix + (*vmatrix_width+j) * CHAR_HEIGHT + i)->color = current_color;
+                    } else {
+                        (*vmatrix + (*vmatrix_width+j) * CHAR_HEIGHT + i)->color = 0;
+                    }
+                }
+            }
+            *vmatrix_width += char_width;
+        }
+
+    }
+}
+
+
+char * read_text_into_vmatrix(char *args, ws2811_led_t **vmatrix, int *vmatrix_width, int inout, size_t color_size){
+    *vmatrix_width = 0;
+
+    unsigned int current_color=255; //(red)
+    if (args!=NULL && *args!=0){
+        if (*args==',') args++; //just in case someone made two commas?!? Or the original dev wanted to be failsafe if he forgot to increment args before calling his read_xxx functions. I'll just keep it for consistency.
+        while (*args!=0 && *args!=','){
+            if (*args == '/') { // we found our "escape-character"
+              if( *(args+1) == '/') {
+                  render_into_vmatrix('/', vmatrix, vmatrix_width, current_color);
+                  args++;
+              } else if (*(args+1) == ',') {
+                  render_into_vmatrix(',', vmatrix, vmatrix_width, current_color);
+                  args++;
+              } else {
+                  //we make no errorhandling here (yet). If / is not followed by / then it has to be followed by a color-definition.
+                  read_color(++args, &current_color, color_size);
+                  args+=2*color_size-1; //have to increas by on less than you would expect because of the "general" args++ ....
+              }
+            } else {
+                render_into_vmatrix(*args, vmatrix, vmatrix_width, current_color);
+            }
+            args++;
+        }
+    }
+
+    return args;
+}
+
 //returns time stamp in ms
 unsigned long long time_ms(){
 	struct timeval tp;
@@ -408,9 +517,9 @@ void global_brightness(char * args){
 }
 
 //sets the ws2811 channels
-//setup channel, led_count, type, invert, global_brightness, GPIO
+//setup channel, width, height, type, invert, global_brightness, GPIO
 void setup_ledstring(char * args){
-    int channel=0, led_count=10, type=0, invert=0, brightness=255, GPIO=18;
+    int channel=0, type=0, invert=0, brightness=255, GPIO=18;
 	
     const int led_types[]={WS2811_STRIP_RGB, //0 
                            WS2811_STRIP_RBG, //1 
@@ -427,15 +536,16 @@ void setup_ledstring(char * args){
                            };
     
 	args = read_channel(args, & channel);
-	args = read_int(args, & led_count);
-	args = read_int(args, & type);
+    args = read_int(args, & matrix_width);
+    args = read_int(args, & matrix_height);
+    args = read_int(args, & type);
 	args = read_int(args, & invert);
 	args = read_int(args, & brightness);
 	args = read_int(args, & GPIO);
     
     if (channel >=0 && channel < RPI_PWM_CHANNELS){
 
-        if (debug) printf("Initialize channel %d,%d,%d,%d,%d,%d\n", channel, led_count, type, invert, brightness, GPIO);
+        if (debug) printf("Initialize channel %d,%d,%d,%d,%d,%d,%d\n", channel, matrix_width, matrix_height, type, invert, brightness, GPIO);
 
         int color_size = 4;       
         
@@ -452,7 +562,7 @@ void setup_ledstring(char * args){
         
         ledstring.channel[channel].gpionum = GPIO;
         ledstring.channel[channel].invert = invert;
-        ledstring.channel[channel].count = led_count;
+        ledstring.channel[channel].count = matrix_width * matrix_height;
         ledstring.channel[channel].strip_type=led_types[type];
         ledstring.channel[channel].brightness=brightness;
         ledstring.channel[channel].color_size=color_size;
@@ -538,7 +648,7 @@ void rotate_strip(int channel, int nplaces, int direction, unsigned int new_colo
     ws2811_led_t * leds = ledstring.channel[channel].leds;
     unsigned int led_count = ledstring.channel[channel].count;
 	unsigned int n,i;
-	for(n=0;n<nplaces;n++){
+	for(n=0;n<nplaces;n++){ //Really?!? two loops?
 		if (direction==1){
 			tmp_led = leds[0];
 			for(i=1;i<led_count;i++){
@@ -1404,6 +1514,84 @@ void fly_out(char * args) {
     }
 }
 
+//adds a "black" space in front and at the end of my virtual matrix (size of matrix_width)
+void add_in_out_space(ws2811_led_t **vmatrix, int *vmatrix_width){
+    int i;
+    ws2811_led_t *new_vmatrix = malloc(sizeof(ws2811_led_t)*(*vmatrix_width)*matrix_height+2*matrix_width);
+    if(new_vmatrix) {
+        ws2811_led_t *temp = new_vmatrix;
+        //prepend black:
+        for(i=0;i<matrix_width*matrix_height;i++){
+            (temp++)->color=0;
+        }
+        //copy vmatrix:
+        for(i=0;i<(*vmatrix_width)*matrix_height;i++){
+            (temp++)->color = (*vmatrix)[i].color;
+        }
+        //append black:
+        for(i=0;i<matrix_width*matrix_height;i++){
+            (temp++)->color=0;
+        }
+        free(*vmatrix); //free the old memory of vmatrix
+        *vmatrix = new_vmatrix;
+        *vmatrix_width+=2*matrix_width;
+    } else {
+        //just do nothing in case of oom, outer function will free memory anyways.
+    }
+}
+
+//create some "marquee" (hope my translation for "Laufschrift" is correct, dict.cc wasn't too helpful ...)
+/*  text  .. (string) The text to display with some additional formatting (still work in progress)
+          .. currently  / is treated as escape-char for colors (// if you want to display /)
+          .. For example: /FF0000red /335566and /00FF00green /335566are colors.
+    delay .. number of ms between showing next position (more or less, we are no realtime-system..)
+    loops .. (int) Number of loops the text runs through the matrix.
+    inout .. (int) If yes, empty space is pre- and appended, so the text runs into an empty matrix and leaves an empty matrix when finished ... (default yes)
+    reverse_2nd_row .. (int) On my longruner-matrix the leds are arranged like a "snake" (bottom row from right to left, the row above from left to right and so on...)
+                       thus, on such matrices (correct plural?) we have to reverse the index of every second row.
+                       TODO: This really should not be a general setting and not part of a command.
+ */
+void marquee(char * args){
+    int channel=0, marquee_loops=1, inout = 1, reverse_2nd_row=1, delay=50;
+    // we render the text once and store it into a "virtual matrix" with variable width but bigger than our led-matrix.
+    // as vmatrix has to be extended, as the text grows, the "first dimension" of matrix is width ...
+    // TODO: Check if we have a problem if text is smaller than our matrix and inout is set to false...
+    int vmatrix_width;
+    ws2811_led_t *vmatrix = NULL;
+    int current_position=0,loops_finished=0;
+
+    args = read_channel(args, &channel);
+    args = read_text_into_vmatrix(args, &vmatrix, &vmatrix_width, inout, ledstring.channel[channel].color_size);
+    args = read_int(args, &delay);
+    args = read_int(args, &marquee_loops);
+    args = read_int(args, &reverse_2nd_row);
+    args = read_int(args, &inout);
+    if (inout) add_in_out_space(&vmatrix,&vmatrix_width);
+    if (is_valid_channel_number(channel)){
+        while (!end_current_command && (/*marquee_loops == 0 ||*/ marquee_loops > loops_finished) ) {
+
+            // display matrix ...
+            for (int x = 0; x < matrix_width; x++) {
+                for (int y = 0; y < matrix_height; y++) {
+                    if (reverse_2nd_row && y % 2) {
+                        ledstring.channel[channel].leds[-x - 1 + (y + 1) * matrix_width].color = vmatrix[(x+current_position) * matrix_height + y].color;
+                    } else {
+                        ledstring.channel[channel].leds[x + y * matrix_width].color = vmatrix[(x+current_position) * matrix_height + y].color;
+                    }
+                }
+            }
+            if(++current_position > vmatrix_width-matrix_width) {
+                current_position = 0;
+                loops_finished++;
+            }
+            ws2811_render(&ledstring);
+            usleep(delay * 1000);
+        }
+    }
+
+    free(vmatrix);
+}
+
 //save_state <channel>,<filename>,<start>,<len>
 void save_state(char * args){
 	int channel=0,start=0, len=0, color, brightness,i=0;
@@ -2023,6 +2211,8 @@ void execute_command(char * command_line){
 			fly_in(arg);
 		}else if (strcmp(command, "fly_out")==0){
 			fly_out(arg);
+        }else if (strcmp(command, "marquee")==0){
+            marquee(arg);
 		#ifdef USE_JPEG
 		}else if (strcmp(command, "readjpg")==0){
 			readjpg(arg);
@@ -2121,7 +2311,7 @@ void tcp_wait_connection (){
     if (start_thread){
         if (debug) printf("Running thread.\n");
 		thread_active=1;
-        thread_running=1; //thread will run untill thread_running becomes 0 (this is after a new client has connected)
+        thread_running=1; //thread will run until thread_running becomes 0 (this is after a new client has connected)
         int s = pthread_create(& thread, NULL, (void* (*)(void*)) & thread_func, NULL);
 		if (s!=0){
 			fprintf(stderr,"Error creating new thread: %d", s);
@@ -2134,8 +2324,11 @@ void tcp_wait_connection (){
     clilen = sizeof(cli_addr);
     active_socket = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
     if (active_socket!=-1){
-		if (setsockopt(active_socket, SOL_SOCKET, SO_KEEPALIVE, &sock_opt, optlen)) printf("Error set SO_KEEPALIVE\n");
-		
+		//if (setsockopt(active_socket, SOL_SOCKET, SO_KEEPALIVE, &sock_opt, optlen)) printf("Error set SO_KEEPALIVE\n");
+		struct timeval tv;
+        tv.tv_sec = 0; //we want a fast timeout
+        tv.tv_usec = 500000;
+        if (setsockopt(active_socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv)) printf("Error set SO_RCVTIMEO\n");
 		//if there is a thread active we exit it 
 		if (thread_active){
 			switch (join_thread_type){

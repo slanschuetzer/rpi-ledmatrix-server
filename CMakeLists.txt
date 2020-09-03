@@ -31,6 +31,7 @@ add_executable(rpi_ledmatrix_server
         spi.cpp
         spi.h
         ws2811.c
-        ws2811.h)
+        ws2811.h
+        5x8_lcd_hd44780u_a02_font.h)
 
 target_link_libraries(rpi_ledmatrix_server PRIVATE Threads::Threads JPEG::JPEG PNG::PNG)

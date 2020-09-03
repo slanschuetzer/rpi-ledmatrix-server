@@ -42,7 +42,15 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
+# IDE-stuff
+.idea
+
+# cmake-build-folder
+cmake-build-debug
+cmake-build-release
+
 #executable / objects:
 *.o
 *.elf
 ws2812svr
+
