@@ -4,8 +4,6 @@ This is a small program for driving my 8x32-ledmatrix (neopixel) i built in a bo
 The main goal of this project will be (apart from refreshing my c-abilities from 20 years ago) to serve as a single server, that will operate the led-matrix, so i'm later able to feed it from several external sources like other programs on the pi (eg. to show temperature or other sensor-data), android-app, network-sources (e.g. nagios) and whatsoever...
 I will try to keep most functionality and only add a function to send text that will be displayed on the matrix. 
 
-And when i get some more time i will get rid of this initialisation on each request. I'm pretty sure, there is no sense in that... 
-
 Everything from here is the old documentation and most of it still valid, but some stuff no more...
 Perhaps i will correct it later...
 
@@ -73,7 +71,8 @@ init
 setup  
     setup 
 		<channel>, 						#channel number
-		<led_count>, 					#number of leds in channel
+		<led_cols>, 					#number of columns in the matrix
+        <led_rows>,                     #number of rows in the matrix
 		<led_type>, 					#type of led (3 color or 4 color) default 0
 		<invert>, 						#invert output, default 0
 		<global_brightness>, 			#global brightness level for channel (0-255), default 255
@@ -93,8 +92,12 @@ setup
 		10 SK6812_STRIP_BRGW
 		11 SK6812_STRIP_BGRW
 
+    My fork changed the parameters of this setup-command that instead of one led_count you have to 
+    pass the rows and the cols of the matrix. You should still be able to use the fork with a 
+    normal led-strip by passing nr_rows=1 and nr_cols=the amount of leds of your strip.
+
     Example:
-    setup 1,10,0
+    setup 1,32,8,3
 ```
 
 * `render` command sends the internal buffer to all leds
@@ -295,6 +298,20 @@ Try this as an example for a 300 LED string:
 	NOTICE: first fill entire strip with a color before calling this function (use fill <channel>,<color>)
 ```
 
+* `marquee`     displays text running through the matrix (colors can be used by escaping them in the text directly to display (nearly) as many colors as you want in one text.
+```
+    mqrquee
+        <channel>,                      #channel number to use
+        <text>,                         #the text to display. Color can be switched for rest of the test by using / followed by color-definition in RRGGBB-form (or WWRRGGBB if applicable (e.g. /FF4400), '/' and ',' have to be escaped with /
+        <delay>,                        #delay in milliseconds between scrolling the text one column to the left. (default: 50)
+        <loops>,                        #how often the text runs through the matrix (default: 1, also deprecated, you can use the 'loop' command instead.)
+        <inout>,                        #if the text shold run into the matrix or already start displayed in the matrix (And the same for the end of the text.) (default 1 and i guess this should not really be configurable.)
+        <reverse2ndrow>                 #just tells, if the index of each 2nd row are inverted like my longruner-matrix. default 1 (=yes) (hopefully soon deprecated, this really should be part of setup-command)
+
+Examples:
+    marquee 1,/FF0000Red /888888and /0000FFblue /888888 are colors/, that i like.,40 
+        this will display the text "Red and blue are colors, that i like." with blue and read displayed in their corresponding color.
+```
 * `save_state` saves current color and brightness values of a channel to a CSV file, format is:
 			   8 character hex number for color + , + 2 character hex for brightness + new line: WWBBGGRR,FF
                the CSV file can be loaded with load_state command.

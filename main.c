@@ -1552,7 +1552,7 @@ void add_in_out_space(ws2811_led_t **vmatrix, int *vmatrix_width){
                        TODO: This really should not be a general setting and not part of a command.
  */
 void marquee(char * args){
-    int channel=0, marquee_loops=1, inout = 0, reverse_2nd_row=1, delay=100;
+    int channel=0, marquee_loops=1, inout = 1, reverse_2nd_row=1, delay=50;
     // we render the text once and store it into a "virtual matrix" with variable width but bigger than our led-matrix.
     // as vmatrix has to be extended, as the text grows, the "first dimension" of matrix is width ...
     // TODO: Check if we have a problem if text is smaller than our matrix and inout is set to false...
