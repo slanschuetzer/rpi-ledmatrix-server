@@ -21,7 +21,7 @@
 #include "ws2811.h"
 
 #define DEFAULT_DEVICE_FILE "/dev/ws281x"
-#define DEFAULT_COMMAND_LINE_SIZE 1024
+#define DEFAULT_COMMAND_LINE_SIZE 2048
 #define DEFAULT_BUFFER_SIZE 32768
 
 #define MAX_KEY_LEN 255
@@ -2324,8 +2324,11 @@ void tcp_wait_connection (){
     clilen = sizeof(cli_addr);
     active_socket = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
     if (active_socket!=-1){
-		if (setsockopt(active_socket, SOL_SOCKET, SO_KEEPALIVE, &sock_opt, optlen)) printf("Error set SO_KEEPALIVE\n");
-		
+		//if (setsockopt(active_socket, SOL_SOCKET, SO_KEEPALIVE, &sock_opt, optlen)) printf("Error set SO_KEEPALIVE\n");
+		struct timeval tv;
+        tv.tv_sec = 0; //we want a fast timeout
+        tv.tv_usec = 500000;
+        if (setsockopt(active_socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv)) printf("Error set SO_RCVTIMEO\n");
 		//if there is a thread active we exit it 
 		if (thread_active){
 			switch (join_thread_type){
