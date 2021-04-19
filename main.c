@@ -16,8 +16,9 @@
 #include <ctype.h>
 #include <errno.h>
 //#include "5x8_lcd_hd44780u_a02_font.h"
-#include "BMSPA_font.h"
+//#include "BMSPA_font.h"
 //#include "Minimum_font.h"
+#include "myFont.h"
 #include "ws2811.h"
 
 #define DEFAULT_DEVICE_FILE "/dev/ws281x"
@@ -382,7 +383,7 @@ int get_width(char c) {
     if (c == ' ') return CHAR_WIDTH; //dont trim space (in fact should to that with other whitespace-chars too ...
     c=indexOf(c);
     int w;
-    for(w = CHAR_WIDTH; w>0 && font[c][w] == 0; w--);
+    for(w = CHAR_WIDTH-1; w>0 && font[c][w] == 0; w--);
     return w+1;
 }
 
@@ -427,7 +428,10 @@ void render_into_vmatrix( char c, ws2811_led_t **vmatrix, int *vmatrix_width, un
                     }
                 }
             }
-            *vmatrix_width += char_width;
+            for (i=0; i<CHAR_HEIGHT;i++) {
+                (*vmatrix + (*vmatrix_width+j) * CHAR_HEIGHT + i)->color = 0;
+            }
+            *vmatrix_width += char_width+1;
         }
 
     }
