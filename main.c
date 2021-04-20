@@ -116,6 +116,9 @@ int       debug=0;            //set to 1 to enable debug output
 int       matrix_height=32;
 int       matrix_width=8;
 
+// is every 2nd row reversed (like my longruner-led-matrix, where even rows start left and odd rows start right ...)
+int     reverse_2nd_row=1;
+
 // currently only one font with fixed size supported TODO: perhaps add fonts and make this dynamically...
 #define CHAR_HEIGHT 8
 #define CHAR_WIDTH 8
@@ -219,6 +222,14 @@ int deg2color(unsigned char WheelPos) {
 //returns if channel is a valid led_string index number
 int is_valid_channel_number(unsigned int channel){
     return (channel >= 0) && (channel < RPI_PWM_CHANNELS) && ledstring.channel[channel].count>0 && ledstring.device!=NULL;
+}
+
+//returns the index in the ledstrip depending on x and y coordinates
+int getLedIndex(int x, int y) {
+    if(reverse_2nd_row && y % 2) {
+        return y * matrix_width + matrix_width - x - 1;
+    }
+    return y * matrix_width + x;
 }
 
 //reads key from argument buffer
@@ -524,7 +535,7 @@ void global_brightness(char * args){
 //setup channel, width, height, type, invert, global_brightness, GPIO
 void setup_ledstring(char * args){
     int channel=0, type=0, invert=0, brightness=255, GPIO=18;
-	
+	reverse_2nd_row=1;
     const int led_types[]={WS2811_STRIP_RGB, //0 
                            WS2811_STRIP_RBG, //1 
                            WS2811_STRIP_GRB, //2 
@@ -545,11 +556,12 @@ void setup_ledstring(char * args){
     args = read_int(args, & type);
 	args = read_int(args, & invert);
 	args = read_int(args, & brightness);
+	args = read_int(args, & reverse_2nd_row);
 	args = read_int(args, & GPIO);
     
     if (channel >=0 && channel < RPI_PWM_CHANNELS){
 
-        if (debug) printf("Initialize channel %d,%d,%d,%d,%d,%d,%d\n", channel, matrix_width, matrix_height, type, invert, brightness, GPIO);
+        if (debug) printf("Initialize channel %d,%d,%d,%d,%d,%d,%d,%d\n", channel, matrix_width, matrix_height, type, invert, brightness, reverse_2nd_row, GPIO);
 
         int color_size = 4;       
         
@@ -710,35 +722,42 @@ void rotate(char * args){
 //rainbow <channel>,<count>,<startcolor>,<stopcolor>,<start>,<len>
 //start and stop = color values on color wheel (0-255)
 void rainbow(char * args) {
-	int channel=0, count=1,start=0,stop=255,startled=0, len=0;
-	
-    if (is_valid_channel_number(channel)) len=ledstring.channel[channel].count;
+	int channel=0, count=1,start=0,stop=255,startled=0,len=matrix_width;
+
 	args = read_channel(args, & channel);
-	if (is_valid_channel_number(channel)) len=ledstring.channel[channel].count;
 	args = read_int(args, & count);
 	args = read_int(args, & start);
 	args = read_int(args, & stop);
 	args = read_int(args, & startled);
+	if(startled>=matrix_width) startled=0;
 	args = read_int(args, & len);
+	if((startled+len) > matrix_width) {
+	    len = matrix_width-startled;
+	}
 	
 	if (is_valid_channel_number(channel)){
         if (start<0 || start > 255) start=0;
         if (stop<0 || stop > 255) stop = 255;
         if (startled<0) startled=0;
-        if (startled+len> ledstring.channel[channel].count) len = ledstring.channel[channel].count-startled;
         
-        if (debug) printf("Rainbow %d,%d,%d,%d,%d,%d\n", channel, count,start,stop,startled,len);
+        if (debug) printf("Rainbow %d,%d,%d,%d,%d,%d\n", channel,count,start,stop,startled,len);
         
-        int numPixels = len; //ledstring.channel[channel].count;;
+        int numCols = len; //ledstring.channel[channel].count;;
         int i, j;
         ws2811_led_t * leds = ledstring.channel[channel].leds;
-        for(i=0; i<numPixels; i++) {
-            leds[startled+i].color = deg2color(abs(stop-start) * i * count / numPixels + start);
+        uint32_t color;
+        for(i=0; i<numCols; i++) {
+            color = deg2color(abs(stop-start) * i * count / numCols + start);
+            for(j=0;j<numCols;j++){
+                leds[getLedIndex(i+startled,j)].color=color;
+            }
         }
     }else{
         fprintf(stderr,ERROR_INVALID_CHANNEL);
     }
 }
+
+
 
 
 
@@ -1556,7 +1575,7 @@ void add_in_out_space(ws2811_led_t **vmatrix, int *vmatrix_width){
                        TODO: This really should not be a general setting and not part of a command.
  */
 void marquee(char * args){
-    int channel=0, marquee_loops=1, inout = 1, reverse_2nd_row=1, delay=50;
+    int channel=0, marquee_loops=1, inout = 1, delay=50;
     // we render the text once and store it into a "virtual matrix" with variable width but bigger than our led-matrix.
     // as vmatrix has to be extended, as the text grows, the "first dimension" of matrix is width ...
     // TODO: Check if we have a problem if text is smaller than our matrix and inout is set to false...
@@ -1568,7 +1587,7 @@ void marquee(char * args){
     args = read_text_into_vmatrix(args, &vmatrix, &vmatrix_width, inout, ledstring.channel[channel].color_size);
     args = read_int(args, &delay);
     args = read_int(args, &marquee_loops);
-    args = read_int(args, &reverse_2nd_row);
+    //args = read_int(args, &reverse_2nd_row);
     args = read_int(args, &inout);
     if (inout) add_in_out_space(&vmatrix,&vmatrix_width);
     if (is_valid_channel_number(channel)){
@@ -1577,11 +1596,7 @@ void marquee(char * args){
             // display matrix ...
             for (int x = 0; x < matrix_width; x++) {
                 for (int y = 0; y < matrix_height; y++) {
-                    if (reverse_2nd_row && y % 2) {
-                        ledstring.channel[channel].leds[-x - 1 + (y + 1) * matrix_width].color = vmatrix[(x+current_position) * matrix_height + y].color;
-                    } else {
-                        ledstring.channel[channel].leds[x + y * matrix_width].color = vmatrix[(x+current_position) * matrix_height + y].color;
-                    }
+                    ledstring.channel[channel].leds[getLedIndex(x,y)].color = vmatrix[(x+current_position) * matrix_height + y].color;
                 }
             }
             if(++current_position > vmatrix_width-matrix_width) {
@@ -2244,7 +2259,7 @@ void execute_command(char * command_line){
             printf("init <frequency>,<DMA> (initializes PWM output, call after all setup commands)\n");
             printf("render <channel>,<start>,<RRGGBBWWRRGGBBWW>\n");
             printf("rotate <channel>,<places>,<direction>,<new_color>,<new_brightness>\n");
-            printf("rainbow <channel>,<count>,<start_color>,<stop_color>,<start_led>,<len>\n");
+            printf("rainbow <channel>,<count>,<start_color>,<stop_color>,<start_column>,<len>\n");
             printf("fill <channel>,<color>,<start>,<len>,<OR,AND,XOR,NOT,=>\n");
             printf("brightness <channel>,<brightness>,<start>,<len> (brightness: 0-255)\n");
             printf("fade <channel>,<start_brightness>,<end_brightness>,<delay ms>,<step>,<start_led>,<len>\n");
