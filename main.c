@@ -116,6 +116,9 @@ int       debug=0;            //set to 1 to enable debug output
 int       matrix_height=32;
 int       matrix_width=8;
 
+// is every 2nd row reversed (like my longruner-led-matrix, where even rows start left and odd rows start right ...)
+int     reverse_2nd_row=1;
+
 // currently only one font with fixed size supported TODO: perhaps add fonts and make this dynamically...
 #define CHAR_HEIGHT 8
 #define CHAR_WIDTH 8
@@ -524,7 +527,7 @@ void global_brightness(char * args){
 //setup channel, width, height, type, invert, global_brightness, GPIO
 void setup_ledstring(char * args){
     int channel=0, type=0, invert=0, brightness=255, GPIO=18;
-	
+	reverse_2nd_row=1;
     const int led_types[]={WS2811_STRIP_RGB, //0 
                            WS2811_STRIP_RBG, //1 
                            WS2811_STRIP_GRB, //2 
@@ -545,11 +548,12 @@ void setup_ledstring(char * args){
     args = read_int(args, & type);
 	args = read_int(args, & invert);
 	args = read_int(args, & brightness);
+	args = read_int(args, & reverse_2nd_row);
 	args = read_int(args, & GPIO);
     
     if (channel >=0 && channel < RPI_PWM_CHANNELS){
 
-        if (debug) printf("Initialize channel %d,%d,%d,%d,%d,%d,%d\n", channel, matrix_width, matrix_height, type, invert, brightness, GPIO);
+        if (debug) printf("Initialize channel %d,%d,%d,%d,%d,%d,%d,%d\n", channel, matrix_width, matrix_height, type, invert, brightness, reverse_2nd_row, GPIO);
 
         int color_size = 4;       
         
@@ -1556,7 +1560,7 @@ void add_in_out_space(ws2811_led_t **vmatrix, int *vmatrix_width){
                        TODO: This really should not be a general setting and not part of a command.
  */
 void marquee(char * args){
-    int channel=0, marquee_loops=1, inout = 1, reverse_2nd_row=1, delay=50;
+    int channel=0, marquee_loops=1, inout = 1, delay=50;
     // we render the text once and store it into a "virtual matrix" with variable width but bigger than our led-matrix.
     // as vmatrix has to be extended, as the text grows, the "first dimension" of matrix is width ...
     // TODO: Check if we have a problem if text is smaller than our matrix and inout is set to false...
@@ -1568,7 +1572,7 @@ void marquee(char * args){
     args = read_text_into_vmatrix(args, &vmatrix, &vmatrix_width, inout, ledstring.channel[channel].color_size);
     args = read_int(args, &delay);
     args = read_int(args, &marquee_loops);
-    args = read_int(args, &reverse_2nd_row);
+    //args = read_int(args, &reverse_2nd_row);
     args = read_int(args, &inout);
     if (inout) add_in_out_space(&vmatrix,&vmatrix_width);
     if (is_valid_channel_number(channel)){
