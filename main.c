@@ -224,6 +224,14 @@ int is_valid_channel_number(unsigned int channel){
     return (channel >= 0) && (channel < RPI_PWM_CHANNELS) && ledstring.channel[channel].count>0 && ledstring.device!=NULL;
 }
 
+//returns the index in the ledstrip depending on x and y coordinates
+int getLedIndex(int x, int y) {
+    if(reverse_2nd_row && y % 2) {
+        return y * matrix_width + matrix_width - x - 1;
+    }
+    return y * matrix_width + x;
+}
+
 //reads key from argument buffer
 //example: channel_1_count=10,
 //returns channel_1_count in key buffer, then use read_val to read the 10
@@ -714,35 +722,42 @@ void rotate(char * args){
 //rainbow <channel>,<count>,<startcolor>,<stopcolor>,<start>,<len>
 //start and stop = color values on color wheel (0-255)
 void rainbow(char * args) {
-	int channel=0, count=1,start=0,stop=255,startled=0, len=0;
-	
-    if (is_valid_channel_number(channel)) len=ledstring.channel[channel].count;
+	int channel=0, count=1,start=0,stop=255,startled=0,len=matrix_width;
+
 	args = read_channel(args, & channel);
-	if (is_valid_channel_number(channel)) len=ledstring.channel[channel].count;
 	args = read_int(args, & count);
 	args = read_int(args, & start);
 	args = read_int(args, & stop);
 	args = read_int(args, & startled);
+	if(startled>=matrix_width) startled=0;
 	args = read_int(args, & len);
+	if((startled+len) > matrix_width) {
+	    len = matrix_width-startled;
+	}
 	
 	if (is_valid_channel_number(channel)){
         if (start<0 || start > 255) start=0;
         if (stop<0 || stop > 255) stop = 255;
         if (startled<0) startled=0;
-        if (startled+len> ledstring.channel[channel].count) len = ledstring.channel[channel].count-startled;
         
-        if (debug) printf("Rainbow %d,%d,%d,%d,%d,%d\n", channel, count,start,stop,startled,len);
+        if (debug) printf("Rainbow %d,%d,%d,%d,%d,%d\n", channel,count,start,stop,startled,len);
         
-        int numPixels = len; //ledstring.channel[channel].count;;
+        int numCols = len; //ledstring.channel[channel].count;;
         int i, j;
         ws2811_led_t * leds = ledstring.channel[channel].leds;
-        for(i=0; i<numPixels; i++) {
-            leds[startled+i].color = deg2color(abs(stop-start) * i * count / numPixels + start);
+        uint32_t color;
+        for(i=0; i<numCols; i++) {
+            color = deg2color(abs(stop-start) * i * count / numCols + start);
+            for(j=0;j<numCols;j++){
+                leds[getLedIndex(i+startled,j)].color=color;
+            }
         }
     }else{
         fprintf(stderr,ERROR_INVALID_CHANNEL);
     }
 }
+
+
 
 
 
@@ -2248,7 +2263,7 @@ void execute_command(char * command_line){
             printf("init <frequency>,<DMA> (initializes PWM output, call after all setup commands)\n");
             printf("render <channel>,<start>,<RRGGBBWWRRGGBBWW>\n");
             printf("rotate <channel>,<places>,<direction>,<new_color>,<new_brightness>\n");
-            printf("rainbow <channel>,<count>,<start_color>,<stop_color>,<start_led>,<len>\n");
+            printf("rainbow <channel>,<count>,<start_color>,<stop_color>,<start_column>,<len>\n");
             printf("fill <channel>,<color>,<start>,<len>,<OR,AND,XOR,NOT,=>\n");
             printf("brightness <channel>,<brightness>,<start>,<len> (brightness: 0-255)\n");
             printf("fade <channel>,<start_brightness>,<end_brightness>,<delay ms>,<step>,<start_led>,<len>\n");
