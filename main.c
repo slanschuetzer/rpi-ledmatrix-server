@@ -1596,11 +1596,7 @@ void marquee(char * args){
             // display matrix ...
             for (int x = 0; x < matrix_width; x++) {
                 for (int y = 0; y < matrix_height; y++) {
-                    if (reverse_2nd_row && y % 2) {
-                        ledstring.channel[channel].leds[-x - 1 + (y + 1) * matrix_width].color = vmatrix[(x+current_position) * matrix_height + y].color;
-                    } else {
-                        ledstring.channel[channel].leds[x + y * matrix_width].color = vmatrix[(x+current_position) * matrix_height + y].color;
-                    }
+                    ledstring.channel[channel].leds[getLedIndex(x,y)].color = vmatrix[(x+current_position) * matrix_height + y].color;
                 }
             }
             if(++current_position > vmatrix_width-matrix_width) {
