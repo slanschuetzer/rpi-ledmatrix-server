@@ -103,14 +103,14 @@ typedef struct {
 FILE *    input_file;         //the named pipe handle
 char *    command_line;       //current command line
 char *    named_pipe_file;    //holds named pipe file name 
-char *    initialize_cmd=NULL; //initialze command
+char *    initialize_cmd=NULL; //initialize command
 int       command_index;      //current position
 int       command_line_size;  //max bytes in command line
 int       exit_program=0;     //set to 1 to exit the program
 int       mode;               //mode we operate in (TCP, named pipe, file, stdin)
 do_loop   loops[MAX_LOOPS]={0};      //positions of 'do' in file loop, max 32 recursive loops
 int       loop_index=0;       //current loop index
-int       debug=0;            //set to 1 to enable debug output
+int       debug=1;            //set to 1 to enable debug output
 
 // size of led-matrix
 int       matrix_height=32;
@@ -391,7 +391,7 @@ char indexOf(char c) {
 
 //TODO
 int get_width(char c) {
-    if (c == ' ') return CHAR_WIDTH; //dont trim space (in fact should to that with other whitespace-chars too ...
+    if (c == ' ') return CHAR_WIDTH; //don't trim space (in fact should do that with other whitespace-chars too) ...
     c=indexOf(c);
     int w;
     for(w = CHAR_WIDTH-1; w>0 && font[c][w] == 0; w--);
@@ -880,7 +880,7 @@ void fade (char * args){
         if (debug) printf("fade %d, %d, %d, %d, %d, %d, %d\n", channel, startbrightness, endbrightness, delay, step,start,len);
         
         ws2811_led_t * leds = ledstring.channel[channel].leds;
-        int i,brightness;
+        int i;
         for (brightness=startbrightness; (startbrightness > endbrightness ? brightness>=endbrightness:  brightness<=endbrightness) ;brightness+=step){
             for (i=start;i<start+len;i++){
                 leds[i].brightness=brightness;
@@ -1540,7 +1540,7 @@ void fly_out(char * args) {
 //adds a "black" space in front and at the end of my virtual matrix (size of matrix_width)
 void add_in_out_space(ws2811_led_t **vmatrix, int *vmatrix_width){
     int i;
-    ws2811_led_t *new_vmatrix = malloc(sizeof(ws2811_led_t)*(*vmatrix_width)*matrix_height+2*matrix_width);
+    ws2811_led_t *new_vmatrix = malloc(sizeof(ws2811_led_t)*(*vmatrix_width+2*matrix_width)*matrix_height);
     if(new_vmatrix) {
         ws2811_led_t *temp = new_vmatrix;
         //prepend black:
@@ -1580,7 +1580,7 @@ void marquee(char * args){
     // as vmatrix has to be extended, as the text grows, the "first dimension" of matrix is width ...
     // TODO: Check if we have a problem if text is smaller than our matrix and inout is set to false...
     int vmatrix_width;
-    ws2811_led_t *vmatrix = NULL;
+    ws2811_led_t *vmatrix=NULL;  //No need to malloc, will get "realloc"ated when adding characters to the matrix
     int current_position=0,loops_finished=0;
 
     args = read_channel(args, &channel);
