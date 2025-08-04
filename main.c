@@ -759,7 +759,7 @@ void rainbow(char * args) {
         uint32_t color;
         for(i=0; i<numCols; i++) {
             color = deg2color(abs(stop-start) * i * count / numCols + start);
-            for(j=0;j<numCols;j++){
+            for(j=0;j<matrix_height;j++){
                 leds[getLedIndex(i+startled,j)].color=color;
             }
         }
