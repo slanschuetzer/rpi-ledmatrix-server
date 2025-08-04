@@ -2420,6 +2420,10 @@ void load_config_file(char * filename){
 	FILE * file = fopen(filename, "r");
 	
 	if (debug) printf("Reading config file %s\n", filename);
+	if (!file) {
+		fprintf(stderr, "Error opening config file %s\nExiting.", filename);
+		exit(10);
+	}
 	
 	char line[1024];
     while (fgets(line, sizeof(line), file) != NULL) {
