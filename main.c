@@ -113,8 +113,8 @@ int       loop_index=0;       //current loop index
 int       debug=0;            //set to 1 to enable debug output
 
 // size of led-matrix
-int       matrix_height=32;
-int       matrix_width=8;
+int       matrix_height=8;
+int       matrix_width=32;
 
 // is every 2nd row reversed (like my longruner-led-matrix, where even rows start left and odd rows start right ...)
 int     reverse_2nd_row=1;
@@ -660,35 +660,44 @@ void render(char * args){
 }
 
 void rotate_strip(int channel, int nplaces, int direction, unsigned int new_color, int use_new_color, int new_brightness){
-	ws2811_led_t tmp_led;
+	ws2811_led_t * tmp_leds=NULL; //avoid undefined behaviour when freeing memory.
     ws2811_led_t * leds = ledstring.channel[channel].leds;
     unsigned int led_count = ledstring.channel[channel].count;
-	unsigned int n,i;
-	for(n=0;n<nplaces;n++){ //Really?!? two loops?
-		if (direction==1){
-			tmp_led = leds[0];
-			for(i=1;i<led_count;i++){
-				leds[i-1] = leds[i]; 
-			}
-			if (use_new_color){
-				leds[led_count-1].color=new_color;
-				leds[led_count-1].brightness=new_brightness;
-			}else{
-				leds[led_count-1]=tmp_led;
-			}
-		}else{
-			tmp_led = leds[led_count-1];
-			for(i=led_count-1;i>0;i--){
-				leds[i] = leds[i-1]; 
-			}
-			if (use_new_color){
-				leds[0].color=new_color;	
-				leds[0].brightness=new_brightness;
-			}else{
-				leds[0]=tmp_led;		
-			}
-		}
-	}	
+	unsigned int x,y;
+    int offset,fromIndex,toIndex,direction2;
+
+	direction2 = direction % 2; //direction is not limited to [0,1] so i just treat it as even as -1 and odd as 1
+    if(!direction2) direction2 = -1; //rotate to the right
+	offset=direction2*nplaces;
+	if(!use_new_color) {
+	    //store the leds we would overwrite
+	    tmp_leds =  malloc(sizeof(ws2811_led_t) * matrix_height * nplaces);
+	}
+
+	for(x=0; x< matrix_width; x++){
+	    for(y=0; y<matrix_height; y++) {
+	        // We could save execution-time by just calculating x-indices two times, instead of "matrix_height" times
+	        // But tbh., this would make it even more unreadable and is absolutely not needed.
+            toIndex = getLedIndex((x*direction2 + 2*matrix_width) % matrix_width,y);
+            fromIndex = getLedIndex((x*direction2 + 2*matrix_width + offset) % matrix_width,y);
+            if(!use_new_color && x<nplaces) { //store to temp
+                tmp_leds[y+x*nplaces]=leds[toIndex];
+            }
+            if(x >= (matrix_width - nplaces)) {
+                if(use_new_color) { //fill with new color
+                    leds[toIndex].brightness = new_brightness;
+                    leds[toIndex].color = new_color;
+                } else {    //fill from temp buffer
+                    leds[toIndex] = tmp_leds[(x - matrix_width + nplaces)*nplaces + y];
+                }
+            } else {
+                leds[toIndex] = leds [fromIndex];
+            }
+        }
+	}
+	//if(!use_new_color) { //still not sure, which solution to avoid freeing undefined memory is more beautiful.
+        free(tmp_leds);
+    //}
 }
 
 //shifts all colors 1 position
@@ -709,6 +718,8 @@ void rotate(char * args){
 	}
 	
 	if (debug) printf("Rotate %d %d %d %d %d\n", channel, nplaces, direction, new_color, new_brightness);
+
+	if(nplaces>=matrix_width) return; //no, we won't do that :)
 	
     if (is_valid_channel_number(channel)){
 		rotate_strip(channel, nplaces, direction, new_color, use_new_color, new_brightness);
