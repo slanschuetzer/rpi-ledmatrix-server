@@ -110,7 +110,7 @@ int       exit_program=0;     //set to 1 to exit the program
 int       mode;               //mode we operate in (TCP, named pipe, file, stdin)
 do_loop   loops[MAX_LOOPS]={0};      //positions of 'do' in file loop, max 32 recursive loops
 int       loop_index=0;       //current loop index
-int       debug=1;            //set to 1 to enable debug output
+int       debug=0;            //set to 1 to enable debug output
 
 // size of led-matrix
 int       matrix_height=32;
@@ -2108,7 +2108,7 @@ void write_thread_buffer (char c){
     if (thread_write_index==thread_data_size) expand_thread_data_buffer();
 }
 
-//this function can be run in other thread for TCP/IP to enable do ... loops  (usefull for websites)
+//this function can be run in other thread for TCP/IP to enable do ... loops  (useful for websites)
 void thread_func (void * param){
     thread_read_index=0;
     if (debug) printf("Enter thread %d,%d,%d.\n", thread_running,thread_read_index,thread_write_index);
@@ -2368,7 +2368,7 @@ void tcp_wait_connection (){
 			thread_active=0;
 		}
 		
-		write(active_socket, "READY\r\n", 7);
+		write(active_socket, "HTTP/1.1 200 OK\r\nContent-Length: 7\r\nConnection: close\r\n\r\nREADY\r\n", 64);
 		
 		write_to_thread_buffer=0;
 		thread_write_index=0;
@@ -2460,8 +2460,18 @@ void load_config_file(char * filename){
 				initialize_cmd = (char*)malloc(strlen(val)+1);			
 				strcpy(initialize_cmd, val);
 			}
+		}else if (strcmp(cfg, "debug")==0 && val!=NULL) { // if not given as start-parameter, we can enable debug-mode in the configuration file, of course, this does suppress debug-output that happened during startup until reading the config-file.
+			if (strlen(val)>0) {
+				if (strcmp(val, "true")==0) {
+					debug = 1;
+				} else {
+					const int config_debug = atoi(val);
+					if (config_debug==1) {
+						debug = 1;
+					}
+				}
+			}
 		}
-        
     }
 
     fclose(file);
